@@ -81,8 +81,15 @@ SELECT thread_id , title FROM threads
 #         temp_list.add(check.config['configurable']['thread_id'])
 #     return (list(temp_list))
 
+
+
+
+#-------------------API keys extraction------------------------------------------------------------------
+alpha_vantage_key = os.getenv("ALPHAVANTAGE_API_KEY")
+weather_key = os.getenv("OPENWEATHER_API_KEY")
+
 #--------------------custom tools --------------------------------------------------------------------------
-#Tools 
+
 search_tool = DuckDuckGoSearchRun()
 
 @tool
@@ -114,7 +121,7 @@ def calculator(first_num:float , second_num:float , operator:str):
 def stock_market_tool(symbol:str)->dict:
 
     ''' This is a stock market tool , provides the latest stock value of any stock .'''
-    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey=L8FD6CO1J8UJU9V1"
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={alpha_vantage_key}"
     r = requests.get(url)
     data = r.json()
 
@@ -123,7 +130,7 @@ def stock_market_tool(symbol:str)->dict:
 @tool 
 def weather_api(lat:float , lon:float):
     ''' Get the current weather for a location using latitude and longitud'''
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid=83fa24fc279b921b6f04eaa973155b61"
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={weather_key}"
     r = requests.get(url)
     return r.json()
 
