@@ -1,5 +1,5 @@
 import streamlit as st 
-from langchain_core.messages import  HumanMessage
+from langchain_core.messages import  HumanMessage , AIMessage
 from backend import chatbot , model ,save_threads , get_threads_data
 import uuid
 
@@ -15,12 +15,19 @@ def load_chat(thread_id):
     temp_list = []
     output = chatbot.get_state({'configurable':{"thread_id":thread_id}})
     messages = output.values['messages']
+
     for msg in messages:
+
         if isinstance(msg , HumanMessage):
             role = "user"
-        else:
+            temp_list.append({"role":role , "message":msg.content})
+
+        elif isinstance(msg , AIMessage): 
             role="assistant"
-        temp_list.append({"role":role , "message":msg.content})
+            if msg.tool_calls:
+                 continue
+            temp_list.append({"role":role , "message":msg.content})
+
     st.session_state['messages'] = temp_list
     st.session_state['thread_id']=thread_id
     st.rerun()
@@ -106,7 +113,7 @@ st.sidebar.header("My conversations")
 
 for val in reversed(st.session_state['thread_naming']):
     
-    if st.sidebar.button(val['title']):
+    if st.sidebar.button(val['title'] , key=f"thread_{val['thread_id']}"):
         load_chat(val['thread_id'])
     
 
@@ -114,7 +121,11 @@ for val in reversed(st.session_state['thread_naming']):
 #------------------------------other logics -------------------------------------------------------------------------------
 
 
-CONFG = {'configurable':{"thread_id":st.session_state['thread_id']}}
+CONFG = {'configurable':{"thread_id":st.session_state['thread_id']},
+         "metadata":{
+             "thread_id":st.session_state['thread_id']
+         },
+         "run_name":"Chatbot_Traces"}
 
 
 for message in st.session_state.messages:
@@ -139,21 +150,30 @@ if user_input:
 
     with st.chat_message('assistant'):
         with st.spinner("Thinking...."):
-            AI_message = st.write_stream(
-                    (
-                        message_chunk.content
+            
+            def ai_only_res():
+                        
                         for message_chunk, metadata in chatbot.stream(
                             {'messages': [HumanMessage(content=user_input)]},
                             config=CONFG,
                             stream_mode="messages"
-                        )
-                    )
-            )
+                        ):
+
+                            if isinstance(message_chunk, AIMessage):
+                                yield message_chunk.content
+                    
+            
+            AI_message = st.write_stream(ai_only_res())
 
     title = genrate_thread_titles(st.session_state['thread_id'])
+
     
     save_threads(st.session_state['thread_id'] , title)
+    st.session_state.messages.append({"role":"assistant" , "message":AI_message})
+    
+    st.rerun()
 
+    
     
         #     AI_res = chatbot.invoke({'messages':[HumanMessage(content=user_input)]} , config=CONFG)
 
@@ -165,6 +185,4 @@ if user_input:
 
     
 
-    st.session_state.messages.append({"role":"assistant" , "message":AI_message})
-
-    st.rerun()
+    
