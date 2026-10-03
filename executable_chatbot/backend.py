@@ -10,16 +10,31 @@ from langchain_groq import ChatGroq
 from dotenv import load_dotenv
 import sqlite3
 import os 
+import asyncio
 import requests
 from langgraph.prebuilt import ToolNode , tools_condition 
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_core.tools import tool # A decorator used to mark a custom tool as a tool for the LLM
+from langchain_mcp_adapters.client import MultiServerMCPClient
 
 os.environ['LANGCHAIN_PROJECT']="Chatbot"
 
 load_dotenv()
 
-class graph_state(TypedDict): #graph's state
+# --------------------------MCP SERVERS ------------------------------------------
+SERVERS = {
+    "expense": {
+        "transport": "stdio",
+        "command": r"C:\projects\Local_MCP_Server\.venv\Scripts\python.exe",
+        "args": [
+            r"C:\projects\Local_MCP_Server\expense.py"
+        ]
+    }
+}
+
+
+#---------------------------graph's state----------------------------------
+class graph_state(TypedDict): 
 
     messages: Annotated[list[BaseMessage] , add_messages]
 
@@ -38,7 +53,7 @@ checkpointer = SqliteSaver(conn=conn) #checkpointer
 
 
 
-#--------------------------------- Custom Table(for threads names  )---------------------------------------------------------- 
+#--------------------------------- Custom Table(for threads names)------------------------- 
 conn.execute(""" 
     CREATE TABLE IF NOT EXISTS threads (
         thread_id TEXT PRIMARY KEY,
@@ -144,13 +159,13 @@ graph = StateGraph(graph_state)
 
 
 #-----------------------node functions -----------------------------------------------
-def chat_node(state:graph_state):
+async def chat_node(state:graph_state):
     
     # extract the message
     message = state['messages']
 
     # invoke the llm 
-    res = llm_with_tool.invoke(f"answer to the users query , and if using tool , dont respond what tool is being used be professional and give smart answers by analyzing the output of the tools , {message}")
+    res = await llm_with_tool.ainvoke(f"answer to the users query , and if using tool , dont respond what tool is being used be professional and give smart answers by analyzing the output of the tools , {message}")
 
     # return the result 
     return {'messages' : [res]}
@@ -158,6 +173,7 @@ def chat_node(state:graph_state):
 tool_node = ToolNode(tools)
 
 # -------------------------------------adding the nodes ---------------------------------------------------------
+
 graph.add_node("chat_node" , chat_node)
 graph.add_node("tools", tool_node)
 # adding the edges
