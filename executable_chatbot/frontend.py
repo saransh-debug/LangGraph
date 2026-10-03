@@ -1,5 +1,5 @@
 import streamlit as st 
-from langchain_core.messages import  HumanMessage , AIMessage
+from langchain_core.messages import  HumanMessage , AIMessage ,ToolMessage
 from backend import chatbot , model ,save_threads , get_threads_data
 import uuid
 
@@ -22,10 +22,8 @@ def load_chat(thread_id):
             role = "user"
             temp_list.append({"role":role , "message":msg.content})
 
-        elif isinstance(msg , AIMessage): 
+        elif isinstance(msg , AIMessage) and not msg.tool_calls: 
             role="assistant"
-            if msg.tool_calls:
-                 continue
             temp_list.append({"role":role , "message":msg.content})
 
     st.session_state['messages'] = temp_list
@@ -149,7 +147,9 @@ if user_input:
 
 
     with st.chat_message('assistant'):
+        status_holder = {"box": None}
         with st.spinner("Thinking...."):
+
             
             def ai_only_res():
                         
@@ -158,10 +158,25 @@ if user_input:
                             config=CONFG,
                             stream_mode="messages"
                         ):
+                            if isinstance(message_chunk, ToolMessage):
+                                print(message_chunk)
+                                tool_name = getattr(message_chunk, "name", "tool") # if the tool name is present use the name else use the tool as a name to display
+                                
+                                if status_holder["box"] is None:
+                                    status_holder["box"] = st.status(
+                                        f"🔧 Using `{tool_name}` …", expanded=True
+                                    )
+                                else:
+                                    status_holder["box"].update(
+                                        label=f"🔧 Using `{tool_name}` …",
+                                        state="running",
+                                        expanded=True,
+                                    )
 
                             if isinstance(message_chunk, AIMessage):
                                 yield message_chunk.content
-                    
+
+            
             
             AI_message = st.write_stream(ai_only_res())
 
@@ -169,6 +184,7 @@ if user_input:
 
     
     save_threads(st.session_state['thread_id'] , title)
+    
     st.session_state.messages.append({"role":"assistant" , "message":AI_message})
     
     st.rerun()
