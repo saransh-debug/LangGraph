@@ -6,7 +6,7 @@ import uuid
 from background_thread import runtime
 import asyncio
 import queue
-
+import hashlib
 def run_async(coroutine):#used to execute and async function and return its actual result
     return runtime.run(coroutine)
 
@@ -93,7 +93,7 @@ def main():
     if not getattr(backend, 'chatbot', None):
         run_async(backend.start_graph()) #a function in backend.py to start the database and the backend processes
 
-    # -------------------------------state tools management-----------------------------------------------------------------
+# -------------------------------state tools management-----------------------------------------------------------------
 
 
     if 'thread_naming' not in st.session_state:
@@ -101,6 +101,7 @@ def main():
 
 
 
+    
 
     if 'thread_id' not in st.session_state:
         st.session_state['thread_id'] = genrate_thread()
@@ -109,9 +110,15 @@ def main():
     if "messages" not in st.session_state:
         st.session_state['messages'] = []
 
+    if "file_indexes" not in st.session_state:
+        st.session_state['file_indexes'] = {}
 
 
-    # ----------------------------------------------------sidebar panel------------------------------------------------
+    thread_file_indexing = st.session_state['file_indexes'].setdefault(st.session_state['thread_id'],{})
+
+
+
+# ----------------------------------------------------sidebar panel------------------------------------------------
     st.sidebar.title("Your chats")
 
     if st.sidebar.button("New chat"):
@@ -138,6 +145,10 @@ def main():
             st.session_state['thread_id'] = val['thread_id']
         
             st.rerun()
+    
+
+                
+
 
     #------------------------------CONFIG-------------------------------------------------------------------------------
 
@@ -160,16 +171,61 @@ def main():
             st.write(message['message'])
 
 #-----------------USER INPUT -----------------------------
+   
+    chat_input = st.chat_input("Message your AI assistant...",accept_file="multiple",file_type=["pdf"])
 
-    user_input = st.chat_input("Type here ")
-
-    if not user_input:return 
+    
+    #     file_uploader = st.file_uploader("upload files",type=['pdf'])
+        
+    #     if file_uploader:
+    #             file_bytes = file_uploader.getvalue()
+    #             file_hash = hashlib.sha256(file_bytes).hexdigest()
+        
+    #             if file_hash in thread_file_indexing:
+    #                 pass
+    #             else:
+    #                 with st.sidebar.status("uploading pdf..."):
+    #                     summary = backend.file_pdf(
+    #                         file_bytes,
+    #                         st.session_state['thread_id'],
+    #                         file_uploader.name
+    #                     )
+    #                     thread_file_indexing[file_hash]=summary
+    if not chat_input:return 
 
 
     
-    if user_input:
+    if chat_input:
+        user_input = (chat_input.text or " ").strip()
+        file_uploader = chat_input.files
 
-        
+        for uploaded_file in file_uploader:
+            file_bytes = uploaded_file.getvalue()
+            file_hash = hashlib.sha256(file_bytes).hexdigest()
+
+            if file_hash in thread_file_indexing:
+                st.info(
+                    f"{uploaded_file.name} is already processed "
+                    "in this chat."
+                )
+            else:
+                with st.status(
+                    f"Indexing {uploaded_file.name}...",
+                    expanded=True
+                ) as status:
+                    summary = backend.file_pdf(
+                        file_bytes,
+                        st.session_state['thread_id'],
+                        uploaded_file.name,
+                    )
+
+                    thread_file_indexing[file_hash] = summary
+
+                    status.update(
+                        label=f"{uploaded_file.name} indexed successfully",
+                        state="complete",
+                        expanded=False,
+                    )
 
         st.session_state.messages.append(
             {'role':"user" ,
@@ -224,6 +280,7 @@ def main():
                     message_chunk, metadata = item
 
                     if isinstance(message_chunk, ToolMessage):
+                        
                         tool_name = getattr(message_chunk, "name", "tool")
 
                         if status_box is None:
