@@ -172,7 +172,7 @@ def main():
 
 #-----------------USER INPUT -----------------------------
    
-    chat_input = st.chat_input("Message your AI assistant...",accept_file="multiple",file_type=["pdf"])
+    chat_input = st.chat_input("Ask Anything here...",accept_file="multiple",file_type=["pdf"])
 
     
     #     file_uploader = st.file_uploader("upload files",type=['pdf'])

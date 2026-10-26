@@ -129,8 +129,8 @@ _Thread_RagTool_metadata ={}
 async def _get_Retriever(thread_id:Optional[str]):
     "fetches the retriver for current thread is available"
     if thread_id in _Thread_retrivers:
-          return _Thread_retrivers[thread_id]
-    return None
+          return _Thread_retrivers.get(str(thread_id),[])
+    return []
     
 
 
@@ -149,9 +149,16 @@ def file_pdf(file_bytes:bytes, thread_id:str, filename :Optional[str]=None)->dic
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000,chunk_overlap=400)
         chunks = splitter.split_documents(pdf_data)
         embeddings = GoogleGenerativeAIEmbeddings( model ="models/gemini-embedding-001")
-        vector_Store = FAISS.from_documents(embedding=embeddings , documents=chunks)
-        retriver = vector_Store.as_retriever(search_type='similarity',search_kwargs={"k":4})
-        _Thread_retrivers[str(thread_id)]=retriver
+
+        if str(thread_id) in _Thread_retrivers:
+            retriver = _Thread_retrivers[str(thread_id)]
+            vector_store = retriver.vectorstore
+            vector_store.add_documents(chunks)
+        else:
+            vector_Store = FAISS.from_documents(embedding=embeddings , documents=chunks)
+            retriver = vector_Store.as_retriever(search_type='similarity',search_kwargs={"k":4})
+            _Thread_retrivers[str(thread_id)]=retriver
+
         _Thread_RagTool_metadata[str(thread_id)]={
              "filename":filename or os.path.basename(temp_path),
              "documents":len(pdf_data),
@@ -237,15 +244,19 @@ async def rag_Tool(query:str,config:RunnableConfig)->dict:
     Retrieve relevant information from the uploaded PDF for this chat thread.
     Always include the thread_id when calling this tool.
     """
+    
     thread_id = config.get("configurable", {}).get("thread_id")
 
     if not thread_id:
          raise ValueError("No thread id found in runnable cofig")
-    retriver = await _get_Retriever(str(thread_id))
-    result = retriver.invoke(query)
+    docs = []
+    retriver= await _get_Retriever(str(thread_id))
+    result = await retriver.ainvoke(query)
     
-    content = [doc.page_content for doc in result]
-    metadata = [doc.metadata for doc in result]
+    
+    
+    content = [doc.page_content for doc in  result]
+    metadata = [doc.metadata for doc in  result]
     
     return( {
         "query":query,

@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph ,START , END 
 from typing import TypedDict,Annotated
-from langchain_core.messages import AIMessage ,HumanMessage,BaseMessage
+from langchain_core.messages import AIMessage ,HumanMessage,BaseMessage,ToolMessage
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_groq import ChatGroq
@@ -44,19 +44,24 @@ def stock_market_tool(symbol:str)->dict:
 
 @tool 
 def buy_stock(state:graph_state,stock_name:str,stock_quantity:int,stock_price:float):
-    '''A dummy tool to imitate as used for buying a stock '''
-    decision = interrupt(
-        {"value":"approval",
-                 "reason":"stock will be bought according to users choice.",
-                 "question":state['messages'][-1].content if state['messages'] else [],
-                 "instruction":f"are you willing to buy {stock_quantity} stocks of {stock_name} ?"
-            }
-    )
+    if stock_quantity>0:
+        '''A dummy tool to imitate as used for buying a stock '''
+        decision = interrupt(
+            {"value":"approval",
+                    "reason":"stock will be bought according to users choice.",
+                    "question":state['messages'][-1].content if state['messages'] else [],
+                    "instruction":f"are you willing to buy {stock_quantity} stocks of {stock_name} costing you {stock_quantity*stock_price} ?"
+                }
+        )
 
-    if decision['response']=="no" or decision['response']=="No":
-            return {"messages":(AIMessage(content="This stock will not be bought."))}
-    elif decision['response']=="yes" or decision['response']=="Yes":
-            return {"messages":(AIMessage(content=f"The  {stock_quantity} stocks of {stock_name} bought for {stock_quantity*stock_price}."))}
+        if decision['response']=="no" or decision['response']=="No":
+                return {"messages":(ToolMessage(content="This stock will not be bought."))}
+        elif decision['response']=="yes" or decision['response']=="Yes":
+                return {"messages":(ToolMessage(content=f"The  {stock_quantity} stocks of {stock_name} bought for {stock_quantity*stock_price}."))}
+        else:
+             return {"messages":(ToolMessage(content="Please answer with yes or no ."))}
+    else:
+         return "the stock quantity is not valid ."
 
 tools = [stock_market_tool,buy_stock]
 
